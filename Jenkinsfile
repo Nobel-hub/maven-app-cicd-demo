@@ -1,7 +1,7 @@
 pipeline {
     agent any
     environment {
-        scannerHome = tool 'sonar7.0'
+        scannerHome = tool 'sonar8.0'
     }
 stages{
         stage('Build') {
@@ -27,7 +27,7 @@ stages{
         }
         stage('Sonar Analysis') {
             steps {
-                withSonarQubeEnv('sonar') {
+                withSonarQubeEnv('sonarqubeserver') {
                     sh '''${scannerHome}/bin/sonar-scanner -Dsonar.projectKey=java-tomcat-sample \
                         -Dsonar.projectName=java-tomcat-sample \
                         -Dsonar.projectVersion=4.0 \
@@ -38,24 +38,4 @@ stages{
                 }
             }
         }
-stage("UploadArtifact") {
-            steps {
-                nexusArtifactUploader(
-                    nexusVersion: 'nexus3',
-                    protocol: 'http',
-                    nexusUrl: '172.31.25.191:8081',
-                    groupId: 'QA',
-                    version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}",
-                    repository: 'java-app',
-                    credentialsId: 'sonartypecred',
-                    artifacts: [
-                        [artifactId: 'java-tomcat-sample',
-                         classifier: '',
-                         file: 'target/java-tomcat-maven-example.war',
-                         type: 'war']
-                    ]
-                )
-            }
-        }
-}
 }
