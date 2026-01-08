@@ -9,25 +9,25 @@ pipeline {
 
         stage('Build') {
             steps {
-                sh 'mvn clean install -DskipTests'
+                sh 'mvn -f pom.xml install -DskipTests'
             }
             post {
                 success {
-                    echo 'Archiving WAR artifact...'
-                    archiveArtifacts artifacts: 'target/*.war'
+                    echo 'Now Archiving it...'
+                    archiveArtifacts artifacts: '**/target/*.war'
                 }
             }
         }
 
         stage('UNIT TEST') {
             steps {
-                sh 'mvn test'
+                sh 'mvn -f pom.xml test'
             }
         }
 
         stage('Checkstyle Analysis') {
             steps {
-                sh 'mvn checkstyle:checkstyle'
+                sh 'mvn -f pom.xml checkstyle:checkstyle'
             }
         }
 
@@ -39,8 +39,9 @@ pipeline {
                         -Dsonar.projectKey=java-tomcat-sample \
                         -Dsonar.projectName=java-tomcat-sample \
                         -Dsonar.projectVersion=4.0 \
-                        -Dsonar.sources=src \
-                        -Dsonar.junit.reportsPath=target/surefire-reports \
+                        -Dsonar.sources=src/ \
+                        -Dsonar.junit.reportsPath=target/surefire-reports/ \
+                        -Dsonar.jacoco.reportsPath=target/jacoco.exec \
                         -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
                     """
                 }
@@ -49,32 +50,25 @@ pipeline {
 
         stage('UploadArtifact') {
             steps {
-                script {
-                    // Maven-safe version (NO spaces, NO colons)
-                    def timestamp = new Date().format("yyyyMMdd-HHmmss", TimeZone.getTimeZone('UTC'))
-                    def artifactVersion = "2-${timestamp}"
-
-                    echo "Uploading artifact version: ${artifactVersion}"
-
-                    nexusArtifactUploader(
-                        nexusVersion: 'nexus3',
-                        protocol: 'http',
-                        nexusUrl: '172.31.81.203:8081',
-                        groupId: 'QA',
-                        version: artifactVersion,
-                        repository: 'myjavaapp',
-                        credentialsId: 'sonartypecred',
-                        artifacts: [
-                            [
-                                artifactId: 'java-tomcat-sample',
-                                classifier: '',
-                                file: 'target/java-tomcat-maven-example.war',
-                                type: 'war'
-                            ]
+                nexusArtifactUploader(
+                    nexusVersion: 'nexus3',
+                    protocol: 'http',
+                    nexusUrl: '172.31.81.203:8081',
+                    groupId: 'QA',
+                    version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}",
+                    repository: 'myjavaapp',
+                    credentialsId: 'sonartypecred',
+                    artifacts: [
+                        [
+                            artifactId: 'java-tomcat-sample',
+                            classifier: '',
+                            file: 'target/java-tomcat-maven-example.war',
+                            type: 'war'
                         ]
-                    )
-                }
+                    ]
+                )
             }
         }
+
     }
 }
