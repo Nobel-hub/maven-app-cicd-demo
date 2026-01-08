@@ -1,9 +1,12 @@
 pipeline {
     agent any
+
     environment {
         scannerHome = tool 'sonar8.0'
     }
+
     stages {
+
         stage('Build') {
             steps {
                 sh 'mvn -f pom.xml install -DskipTests'
@@ -31,17 +34,41 @@ pipeline {
         stage('Sonar Analysis') {
             steps {
                 withSonarQubeEnv('sonarqubeserver') {
-                    sh '''${scannerHome}/bin/sonar-scanner \
+                    sh """
+                        ${scannerHome}/bin/sonar-scanner \
                         -Dsonar.projectKey=java-tomcat-sample \
                         -Dsonar.projectName=java-tomcat-sample \
                         -Dsonar.projectVersion=4.0 \
                         -Dsonar.sources=src/ \
                         -Dsonar.junit.reportsPath=target/surefire-reports/ \
                         -Dsonar.jacoco.reportsPath=target/jacoco.exec \
-                        -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml'''
+                        -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
+                    """
                 }
             }
         }
+
+        stage('UploadArtifact') {
+            steps {
+                nexusArtifactUploader(
+                    nexusVersion: 'nexus3',
+                    protocol: 'http',
+                    nexusUrl: '172.31.81.203:8081',
+                    groupId: 'QA',
+                    version: "${env.BUILD_ID}-${env.BUILD_TIMESTAMP}",
+                    repository: 'myjavaapp',
+                    credentialsId: 'sonartypecred',
+                    artifacts: [
+                        [
+                            artifactId: 'java-tomcat-sample',
+                            classifier: '',
+                            file: 'target/java-tomcat-maven-example.war',
+                            type: 'war'
+                        ]
+                    ]
+                )
+            }
+        }
+
     }
 }
-
