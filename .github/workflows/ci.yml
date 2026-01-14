@@ -57,16 +57,13 @@ jobs:
             -Dsonar.junit.reportsPath=target/surefire-reports/ \
             -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
 
-      # 8️⃣ Upload WAR to Nexus
+      # 8️⃣ Upload WAR to Nexus (curl-based, working)
       - name: Upload WAR to Nexus
-        uses: sonatype-nexus-community/nexus-upload-action@v1
-        with:
-          server-url: 'http://44.203.253.157:8081'
-          repository: 'myjavaapp'
-          username: ${{ secrets.NEXUS_USERNAME }}
-          password: ${{ secrets.NEXUS_PASSWORD }}
-          group-id: 'QA'
-          artifact-id: 'java-tomcat-sample'
-          version: '${{ github.run_id }}'
-          packaging: 'war'
-          file: 'target/java-tomcat-maven-example.war'
+        env:
+          NEXUS_USER: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASS: ${{ secrets.NEXUS_PASSWORD }}
+        run: |
+          echo "Uploading WAR to Nexus..."
+          curl -v -u $NEXUS_USER:$NEXUS_PASS \
+            --upload-file target/java-tomcat-maven-example.war \
+            http://44.203.253.157:8081/repository/myjavaapp/java-tomcat-sample-${{ github.run_id }}.war
