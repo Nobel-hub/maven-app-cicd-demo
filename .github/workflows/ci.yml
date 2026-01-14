@@ -1,0 +1,72 @@
+name: Maven CI Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1️⃣ Checkout source code
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      # 2️⃣ Setup JDK + Maven cache
+      - name: Set up JDK 11
+        uses: actions/setup-java@v4
+        with:
+          java-version: '11'
+          distribution: 'temurin'
+          cache: maven
+
+      # 3️⃣ Build (skip tests)
+      - name: Maven Build
+        run: mvn -f pom.xml install -DskipTests
+
+      # 4️⃣ Upload WAR as artifact
+      - name: Upload WAR artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-war
+          path: target/*.war
+
+      # 5️⃣ Unit Tests
+      - name: Unit Tests
+        run: mvn -f pom.xml test
+
+      # 6️⃣ Checkstyle Analysis
+      - name: Checkstyle
+        run: mvn -f pom.xml checkstyle:checkstyle
+
+      # 7️⃣ SonarQube Scan
+      - name: SonarQube Scan
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          sonar-scanner \
+            -Dsonar.projectKey=java-tomcat-sample \
+            -Dsonar.projectName=java-tomcat-sample \
+            -Dsonar.projectVersion=4.0 \
+            -Dsonar.sources=src/ \
+            -Dsonar.host.url=http://18.206.64.158:9000 \
+            -Dsonar.login=$SONAR_TOKEN \
+            -Dsonar.junit.reportsPath=target/surefire-reports/ \
+            -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml
+
+      # 8️⃣ Upload WAR to Nexus
+      - name: Upload WAR to Nexus
+        uses: sonatype-nexus-community/nexus-upload-action@v1
+        with:
+          server-url: 'http://44.203.253.157:8081'
+          repository: 'myjavaapp'
+          username: ${{ secrets.NEXUS_USERNAME }}
+          password: ${{ secrets.NEXUS_PASSWORD }}
+          group-id: 'QA'
+          artifact-id: 'java-tomcat-sample'
+          version: '${{ github.run_id }}'
+          packaging: 'war'
+          file: 'target/java-tomcat-maven-example.war'
