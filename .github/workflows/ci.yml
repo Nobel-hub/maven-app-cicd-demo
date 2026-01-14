@@ -23,22 +23,22 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      # 3. Build & Test (skip tests first if you want, but better to run them for Sonar)
+      # 3. Build & Test (clean + verify runs tests + generates reports for Sonar)
       - name: Maven Build & Test
-        run: mvn -f pom.xml clean verify -DskipITs  # or just 'verify' if you want integration tests too
+        run: mvn -f pom.xml clean verify -DskipITs
 
-      # 4. Upload WAR artifact (optional - for later use)
+      # 4. Upload WAR artifact (optional - keep for debugging or later steps)
       - name: Upload WAR artifact
         uses: actions/upload-artifact@v4
         with:
           name: java-war
           path: target/*.war
 
-      # 5. Checkstyle Analysis (already done in verify if plugin bound, but explicit if needed)
+      # 5. Checkstyle Analysis (optional if already bound in pom)
       - name: Checkstyle
         run: mvn -f pom.xml checkstyle:checkstyle
 
-      # 6. SonarQube Scan (using modern Maven plugin + token)
+      # 6. SonarQube Scan (using modern plugin coordinates)
       - name: SonarQube Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -52,15 +52,44 @@ jobs:
             -Dsonar.sources=src/ \
             -Dsonar.junit.reportsPath=target/surefire-reports/ \
             -Dsonar.java.checkstyle.reportPaths=target/checkstyle-result.xml \
-            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml   # ← add if you have JaCoCo
+            -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml   # if you added jacoco plugin
 
-      # 7. Upload WAR to Nexus (your exact repo + dynamic name)
-      - name: Upload WAR to Nexus
+      # ────────────────────────────────────────────────────────────────
+      # 7. Deploy WAR to Nexus using mvn deploy:deploy-file
+      #    → Creates temp settings.xml for auth
+      # ────────────────────────────────────────────────────────────────
+      - name: Deploy WAR to Nexus
         env:
-          NEXUS_USER: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASS: ${{ secrets.NEXUS_PASSWORD }}
+          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
+          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
         run: |
-          echo "Uploading WAR to Nexus..."
-          curl -v -u $NEXUS_USER:$NEXUS_PASS \
-            --upload-file target/java-tomcat-maven-example.war \
-            http://44.203.253.157:8081/repository/myjavaapp/java-tomcat-sample-${{ github.run_id }}.war
+          # Create temporary Maven settings.xml with credentials
+          mkdir -p ~/.m2
+          cat > ~/.m2/settings.xml << EOF
+          <settings>
+            <servers>
+              <server>
+                <id>nexus</id>
+                <username>${NEXUS_USERNAME}</username>
+                <password>${NEXUS_PASSWORD}</password>
+              </server>
+            </servers>
+          </settings>
+          EOF
+
+          # Deploy with proper Maven coordinates
+          VERSION="ci-${{ github.run_id }}"
+
+          mvn deploy:deploy-file \
+            -s ~/.m2/settings.xml \
+            -DrepositoryId=nexus \
+            -Durl=http://44.203.253.157:8081/repository/myjavaapp/ \
+            -Dfile=target/java-tomcat-maven-example.war \
+            -DgroupId=com.builds.ci \
+            -DartifactId=java-tomcat-sample \
+            -Dversion=${VERSION} \
+            -Dpackaging=war \
+            -DgeneratePom=true
+
+          echo "Artifact should now appear at:"
+          echo "com/builds/ci/java-tomcat-sample/${VERSION}/java-tomcat-sample-${VERSION}.war"
